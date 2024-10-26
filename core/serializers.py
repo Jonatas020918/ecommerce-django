@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from core.models import Address, User
+from core.models import Address, User, Product, OrderItem, Order, Payment
 
 
 class AddressSerializer(serializers.ModelSerializer):
@@ -39,3 +39,47 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user.save()
 
         return user
+
+
+# Serializer para Product
+class ProductSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = ['id', 'name', 'description', 'price', 'stock']
+
+
+# Serializer para OrderItem
+class OrderItemSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+    product_id = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), write_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = ['id', 'product', 'product_id', 'quantity']
+
+
+# Serializer para Order
+class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True)
+    user = serializers.StringRelatedField(read_only=True)
+    total_amount = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = Order
+        fields = ['id', 'user', 'items', 'created_at', 'updated_at', 'total_amount', 'status']
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items')
+        order = Order.objects.create(**validated_data)
+        for item_data in items_data:
+            OrderItem.objects.create(order=order, **item_data)
+        return order
+
+
+# Serializer para Payment
+class PaymentSerializer(serializers.ModelSerializer):
+    order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all())
+
+    class Meta:
+        model = Payment
+        fields = ['id', 'order', 'amount', 'timestamp', 'method', 'successful']
